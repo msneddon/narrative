@@ -17,13 +17,25 @@
 
         maxRange: null,
         minRange: null,
+        heatmap: null,
+        $heatmapDiv: null,
 
+        warningLimit: 50,
+        trimLimit: 500,
+        wasTrimLimitReached: false,
+        
+        
         // To be overriden to specify additional parameters
         getSubmtrixParams: function(){
             var self = this;
 
             var features = [];
             if(self.options.geneIds) { features = $.map(self.options.geneIds.split(","), $.trim); }
+
+            if (features.length > self.trimLimit) {
+                features = features.slice(0, self.trimLimit);
+                self.wasTrimLimitReached = true;
+            }
 
             self.minRange = -1; self.maxRange = 1;
             if(self.options.minRange) {
@@ -65,7 +77,7 @@
                 }                
                 data.push(row);
             }            
-            var heatmap =
+            self.heatmap =
                 {
                     row_ids : rowIds,
                     row_labels : rowIds,
@@ -87,24 +99,52 @@
             var hmW = 150 + 110 + size * colW;
             if (hmW > 700)
                 hmW = 700;
-            $heatmapDiv = $("<div style = 'width : "+hmW+"px; height : "+hmH+"px'></div>");
-            $containerDiv.append($heatmapDiv);
+            self.$heatmapDiv = $("<div style = 'width : "+hmW+"px; height : "+hmH+"px'></div>");
+            if (self.wasTrimLimitReached) {
+                var $warningDiv = $("<div>")
+                        .addClass("alert alert-danger")
+                        .append("<b>Warning:</b>")
+                        .append("<br>Correlation matrix was trimmed by "+self.trimLimit+" by "+self.trimLimit+" in order to avoid browser crash.");
+                $containerDiv.append($warningDiv);
+            }
+            $containerDiv.append(self.$heatmapDiv);
             $containerDiv.append("<div style = 'width : 5px; height : 5px'></div>");
 
             // TODO: heatmap values out of range still scale color instead of just the max/min color
-            var hm = $heatmapDiv.kbaseHeatmap(
-                {
-                    dataset : heatmap,
-                    // ulIcon : '../img/labs_icon.png',
-                    colors : ['#FFA500', '#FFFFFF', '#0066AA'],
-                    //ulIcon : '/functional-site/assets/navbar/images/kbase_logo.png',
-                    minValue : self.minRange,
-                    maxValue : self.maxRange
-                }
-            );
-            
-        }
+            if (data.length > self.warningLimit) {
+                var $warningDiv = $("<div>")
+                        .addClass("alert alert-danger")
+                        .append("<b>Warning:</b>")
+                        .append("<br>Correlation matrix is larger than "+self.warningLimit+" by "+self.warningLimit+" and may freeze your browser. Do you want to continue?");
+                self.$heatmapDiv.append($warningDiv);
+                var $btn = $('<button>')
+                        .attr('type', 'button')
+                        .attr('value', 'Next')
+                        .addClass('kb-primary-btn')
+                        .append('Show heatmap despite warnings');
+                self.$heatmapDiv.append($btn);
+                $btn.click($.proxy(function(event) {
+                    self.showHeatmap();
+                }, this));
+            } else {
+                self.showHeatmap();
+            }
+        },
 
+        showHeatmap: function() {
+            var self = this;
+            self.$heatmapDiv.empty();
+            self.$heatmapDiv.kbaseHeatmap(
+                    {
+                        dataset : self.heatmap,
+                        // ulIcon : '../img/labs_icon.png',
+                        colors : ['#FFA500', '#FFFFFF', '#0066AA'],
+                        //ulIcon : '/functional-site/assets/navbar/images/kbase_logo.png',
+                        minValue : self.minRange,
+                        maxValue : self.maxRange
+                    }
+            );
+        }
         
         // buildWidget: function($containerDiv){
         //     var submatrixStat = this.submatrixStat;
