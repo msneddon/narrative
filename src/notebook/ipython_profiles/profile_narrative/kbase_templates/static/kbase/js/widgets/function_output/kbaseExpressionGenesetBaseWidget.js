@@ -125,17 +125,30 @@ define(['jquery',
 
             // if a feature set is defined, use it.
             if(self.options.featureset) {
-                self.ws.get_objects([{ref:self.options.workspaceID+"/"+self.options.featureset}],
+                self.ws.get_object_subset([{ref:self.options.workspaceID+"/"+self.options.featureset, included:["elements"]},
+                                           {ref:self.options.workspaceID+"/"+self.options.expressionMatrixID, included:["feature_mapping"]}],
                     function(fdata) {
                         var fs = fdata[0].data;
                         if(!self.options.geneIds) { self.options.geneIds=''; }
 
+                        var featureMapping = fdata[1].data.feature_mapping;
+                        var featIdsToRowIds = {};
+                        for (var rowId in featureMapping) {
+                            if (featureMapping.hasOwnProperty(rowId)) {
+                                var featureId = featureMapping[rowId];
+                                featIdsToRowIds[featureId] = rowId;
+                            }
+                        }
+                        
                         for (var fid in fs.elements) {
                             if (fs.elements.hasOwnProperty(fid)) {
+                                var rowId = fid;
+                                if (featIdsToRowIds.hasOwnProperty(fid))
+                                    rowId = featIdsToRowIds[fid];
                                 if(self.options.geneIds) {
                                     self.options.geneIds += ",";
                                 }
-                                self.options.geneIds += fid;
+                                self.options.geneIds += rowId;
                         //        for now we ignore which genome it came from, just use the ids
                         //        for (var k=0; k<fs.elements[fid].length; k++) {
                         //            var gid = fs.elements[fid][k];

@@ -381,10 +381,16 @@ define(['jquery',
                         var geneIds = self.getClusterGeneIds(rowIndex);
 
                         if(methodInput==='build_feature_set') {
+                            var featureIds = [];
+                            for (var i in geneIds) {
+                                var rowId = geneIds[i];
+                                var fId = self.featureMapping ? self.featureMapping[rowId] : null;
+                                featureIds.push(fId ? fId : rowId);
+                            }
 							IPython.narrative.createAndRunMethod(methodInput, 
 								{
 									'input_genome':self.genomeID, 
-									'input_feature_ids': geneIds.join(","),
+									'input_feature_ids': featureIds.join(","),
 									'output_feature_set': self.options.clusterSetID + "_Cluster"+rowIndex+"_Features",
 									'description': 'Features were selected from Cluster ' + rowIndex + ' of a FeatureClusters data object '+
 													'named ' + self.options.clusterSetID + '.'
