@@ -36,6 +36,7 @@ define(['jquery',
 		genomeID: null,
 		genomeName: null,
 		features: null,
+		globalNodeUniqueId: 0,
 					
 		init: function(options) {
 			this._super(options);
@@ -238,37 +239,121 @@ define(['jquery',
             /*var newick = self.clusterSet.feature_dendrogram;
             if (newick) {
                 var tree = kn_parse(newick);
-                var root = self.transformKnhxTree(tree.root, 10);
-                console.log(JSON.stringify(root.children[0].children[0].children[0].children[0]));
+                var clusterLabels = self.getClusterPosArray();
+                var root = self.transformKnhxTree(tree.root, 10, clusterLabels);
+                //root = root.children[0].children[0].children[0];
+                //console.log(JSON.stringify(root));
                 var tabDendro = $("<div style='max-height: 600px;'/>");
                 tabPane.kbaseTabs('addTab', {tab: 'Dendrogram', content: tabDendro, canDelete : false, show: false});
-                var dendroPanel = $("<div/>");
+                var dendroPanel = $("<div style='width: 800px;'/>");
                 tabDendro.append(dendroPanel);
                 dendroPanel.kbaseTreechart({ 
                     lineStyle: 'square',
-                    dataset: root
+                    dataset: root,
+                    layout : 'cluster'
                 });
             }*/
 		},
 		
-		transformKnhxTree: function(node, scale) {
+		getClusterPosArray: function() {
+		    var ret = [];
+		    for (var i = 0; i < this.matrixRowIds.length; i++)
+		        ret.push(0);
+		    for (var clusterPos = 0; clusterPos < this.clusterSet.feature_clusters.length; clusterPos++) {
+		        var cluster = this.clusterSet.feature_clusters[clusterPos].id_to_pos;
+		        for (var rowId in cluster) {
+		            var rowPos = cluster[rowId];
+		            ret[rowPos] = clusterPos;
+		        }
+		    }
+		    return ret;
+		},
+		
+		transformKnhxTree: function(node, scale, clusterLabels) {
 		    var ret = {};
 		    if (node.d > 0) {
 		        ret.distance = node.d * scale;
 		    } else {
 		        ret.distance = 0;
 		    }
+            this.globalNodeUniqueId++;
+            ret.id = "node_" + this.globalNodeUniqueId;
 		    if (node.child && node.child.length > 0) {
 		        var children = [];
 		        ret.children = children;
-		        for (var i = 0; i < node.child.length; i++)
-		            children.push(this.transformKnhxTree(node.child[i], scale));
+		        var differentClusterPosNumber = 0;
+		        var clusterPosToTrueMap = {};
+		        for (var i = 0; i < node.child.length; i++) {
+		            var subnode = this.transformKnhxTree(node.child[i], scale, clusterLabels);
+		            children.push(subnode);
+		            var clusterPos = subnode.clusterPos;
+		            if (clusterPos == null) {
+		                differentClusterPosNumber += 2;
+		            } else if (!clusterPosToTrueMap[clusterPos]) {
+		                clusterPosToTrueMap[clusterPos] = true;
+		                differentClusterPosNumber++;
+		            }
+		        }
+		        ret.clusterPos = null;
+                if (differentClusterPosNumber == 1)
+                    for (var clusterPos in clusterPosToTrueMap)
+                        if (clusterPosToTrueMap.hasOwnProperty(clusterPos))
+                            ret.clusterPos = clusterPos;
+		        for (var i = 0; i < children.length; i++) {
+		            var subnode = children[i];
+		            if (subnode.clusterPos != null) {
+		                if (differentClusterPosNumber == 1) {
+                            subnode.weight = 3;
+                            subnode.lineStroke = this.generateColor(subnode.clusterPos);
+		                } else if (subnode.name === "") {
+                            subnode.name = "cluster_" + subnode.clusterPos;
+                            subnode.open = false;
+		                }
+		            }
+		        }
+		        ret.name = "";
+                ret.open = true;
 		    } else {
-                ret.name = "Name: " + node.name;		        
+		        var pos = parseInt(node.name);
+		        ret.rowPos = pos;
+		        var featureId = this.matrixRowIds[pos];
+		        if (this.featureMapping && this.featureMapping[featureId] && 
+		                featureId !== this.featureMapping[featureId]) {
+		            featureId += " (" + this.featureMapping[featureId] + ")";
+		        }
+                var clusterPos = clusterLabels[pos];
+		        featureId += " (" + clusterPos + ")";
+                ret.name = featureId;
+                ret.clusterPos = clusterPos;
 		    }
 		    return ret;
 		},
 
+		generateColor: function(clusterPos) {
+		    var numOfSteps = this.clusterSet.feature_clusters.length;
+		    var step = (1114111 * clusterPos) % numOfSteps;
+            // This function generates vibrant, "evenly spaced" colours (i.e. no clustering). This is ideal 
+            // for creating easily distinguishable vibrant markers in Google Maps and other apps.
+            // Adam Cole, 2011-Sept-14
+            // HSV to RBG adapted from: 
+            // http://mjijackson.com/2008/02/rgb-to-hsl-and-rgb-to-hsv-color-model-conversion-algorithms-in-javascript
+            var r, g, b;
+            var h = (step + 0.0) / numOfSteps;
+            var i = Math.floor(h * 6);
+            var f = h * 6 - i;
+            var q = 1 - f;
+            switch(i % 6){
+                case 0: r = 1, g = f, b = 0; break;
+                case 1: r = q, g = 1, b = 0; break;
+                case 2: r = 0, g = 1, b = f; break;
+                case 3: r = 0, g = q, b = 1; break;
+                case 4: r = f, g = 0, b = 1; break;
+                case 5: r = 1, g = 0, b = q; break;
+            }
+            return "#" + ("00" + (~ ~(r * 255)).toString(16)).slice(-2) + 
+                ("00" + (~ ~(g * 255)).toString(16)).slice(-2) + ("00" + (~ ~(b * 255)).toString(16)).slice(-2);
+		},
+		
 		registerActionButtonClick : function(){
 			var self = this;
 			var pref = self.pref;
