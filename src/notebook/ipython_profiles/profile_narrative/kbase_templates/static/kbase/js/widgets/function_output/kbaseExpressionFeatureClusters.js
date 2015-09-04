@@ -37,6 +37,7 @@ define(['jquery',
 		genomeName: null,
 		features: null,
 		globalNodeUniqueId: 0,
+		$tabPane: null,
 					
 		init: function(options) {
 			this._super(options);
@@ -139,6 +140,7 @@ define(['jquery',
 			///////////////////////////////////// Instantiating Tabs ////////////////////////////////////////////
 			$container.empty();
 			var tabPane = $('<div id="'+pref+'tab-content">');
+			self.$tabPane = tabPane;
 			$container.append(tabPane);
 
 			tabPane.kbaseTabs({canDelete : true, tabs : []});                    
@@ -214,17 +216,7 @@ define(['jquery',
                 $('.show-'+showClass+'_'+self.pref).unbind('click');
                 $('.show-'+showClass+'_'+self.pref).click(function() {
                     var pos = $(this).data('pos');
-                    var tabName = "Cluster " + pos;
-                    if (tabPane.kbaseTabs('hasTab', tabName)) {
-                        tabPane.kbaseTabs('showTab', tabName);
-                        return;
-                    }
-                    var tabDiv = $("<div/>");
-                    tabPane.kbaseTabs('addTab', {tab: tabName, content: tabDiv, canDelete : true, show: true, deleteCallback: function(name) {
-                        tabPane.kbaseTabs('removeTab', name);
-                    }});
-                    self.buildClusterFeaturesTable(tabDiv, pos);
-                    tabPane.kbaseTabs('showTab', tabName);
+                    self.openClusterTab(pos);
                 })
             }
 
@@ -235,12 +227,13 @@ define(['jquery',
                 updateClusterLinks("clusters2");
             });
 
-            ///////////////////////////////////// Hierarchical dendrogram tab ////////////////////////////////////////////   
-            /*var newick = self.clusterSet.feature_dendrogram;
+            ///////////////////////////////////// Hierarchical dendrogram tab ////////////////////////////////////////////  
+            var numOfSteps = this.clusterSet.feature_clusters.length;
+            var newick = self.clusterSet.feature_dendrogram;
             if (newick) {
                 var tree = kn_parse(newick);
                 var clusterLabels = self.getClusterPosArray();
-                var root = self.transformKnhxTree(tree.root, 10, clusterLabels);
+                var root = self.transformKnhxTree(tree.root, 5, clusterLabels);
                 //root = root.children[0].children[0].children[0];
                 //console.log(JSON.stringify(root));
                 var tabDendro = $("<div style='max-height: 600px;'/>");
@@ -250,9 +243,29 @@ define(['jquery',
                 dendroPanel.kbaseTreechart({ 
                     lineStyle: 'square',
                     dataset: root,
-                    layout : 'cluster'
+                    displayStyle:'NTnt',
+                    layout : 'cluster',
+                    circleRadius : 3,
+                    nodeDblClick : function(d) {
+                        self.openClusterTab(d.clusterPos);
+                    }
                 });
-            }*/
+            }
+		},
+		
+		openClusterTab: function(pos) {
+		    var self = this;
+            var tabName = "Cluster " + pos;
+            if (self.$tabPane.kbaseTabs('hasTab', tabName)) {
+                self.$tabPane.kbaseTabs('showTab', tabName);
+                return;
+            }
+            var tabDiv = $("<div/>");
+            self.$tabPane.kbaseTabs('addTab', {tab: tabName, content: tabDiv, canDelete : true, show: true, deleteCallback: function(name) {
+                self.$tabPane.kbaseTabs('removeTab', name);
+            }});
+            self.buildClusterFeaturesTable(tabDiv, pos);
+            self.$tabPane.kbaseTabs('showTab', tabName);
 		},
 		
 		getClusterPosArray: function() {
@@ -307,23 +320,27 @@ define(['jquery',
                             subnode.lineStroke = this.generateColor(subnode.clusterPos);
 		                } else if (subnode.name === "") {
                             subnode.name = "cluster_" + subnode.clusterPos;
+                            subnode.tooltip = "Click to expand/collapse<br>Double click to open in new tab";
                             subnode.open = false;
 		                }
 		            }
 		        }
 		        ret.name = "";
+                ret.tooltip = "Click to expand/collapse";
                 ret.open = true;
 		    } else {
 		        var pos = parseInt(node.name);
 		        ret.rowPos = pos;
-		        var featureId = this.matrixRowIds[pos];
-		        if (this.featureMapping && this.featureMapping[featureId] && 
-		                featureId !== this.featureMapping[featureId]) {
-		            featureId += " (" + this.featureMapping[featureId] + ")";
+		        var rowId = this.matrixRowIds[pos];
+                ret.name = rowId;
+		        ret.rowId = rowId;
+		        if (this.featureMapping && this.featureMapping[rowId] && 
+		                rowId !== this.featureMapping[rowId]) {
+		            var featureId = this.featureMapping[rowId];
+		            ret.featureId = featureId;
+		            ret.name += " (" + featureId + ")";
 		        }
                 var clusterPos = clusterLabels[pos];
-		        featureId += " (" + clusterPos + ")";
-                ret.name = featureId;
                 ret.clusterPos = clusterPos;
 		    }
 		    return ret;
